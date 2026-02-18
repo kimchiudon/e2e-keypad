@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 
 type Cell = {
-  pos: number;
-  token: string;
+  inner_value: string;
   image: string;
   is_blank: boolean;
 };
@@ -34,7 +33,7 @@ export default function App() {
 
   const handleClick = (cell: Cell) => {
     if (cell.is_blank) return;
-    console.log("클릭된 토큰:", cell.token);
+    console.log("클릭된 숫자:", cell.inner_value);
   };
 
   return (
@@ -52,7 +51,7 @@ export default function App() {
       >
         {layout.map((cell) => (
           <button
-            key={cell.pos}
+            key={cell.inner_value}
             onClick={() => handleClick(cell)}
             disabled={cell.is_blank}
             style={{ width: 100, height: 100 }}
