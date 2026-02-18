@@ -26,36 +26,44 @@ def create_keypad_session() -> KeypadInitResponse:
 
     DIGITS = [0,1,2,3,4,5,6,7,8,9,None,None]
 
-    mapping: Dict[str, str] = {}
-    layout: List[KeypadCell] = []
+    mapping = {}
+    layout = []
+    skirt = ["0","0","0","0","0","0","0","0","0","0","0","0"]
+    i=0
+    real_value = 0
 
-    salt = os.urnadom(16)
-    inner_value = hashlib.sha256(salt).hexdigest()
+    for pos, inner_value in enumerate(skirt):
+        pos = DIGITS[i]
 
-    for pos, inner_value in enumerate():
-        for i in range (DIGITS): 
-            pos = DIGITS[i],
+        if pos != None:
+            salt = os.urandom(16)
+            real_value = hashlib.sha256(salt).hexdigest()
+            inner_value = str (real_value)
             mapping[pos] = inner_value
             
             try:
                 img_b64 = load_image_base64(pos)
-                
+            
             except FileNotFoundError as e:
                 raise HTTPException(status_code=400, detail=str(e))
+                
+            save_session(session_id=session_id, mapping=mapping, expires_at=expires_at)
 
-    random.shuffle(mapping)  
-    
+        else:
+            img_b64 = load_image_base64("EMPTY")
+            inner_value = "0"
+            save_session(session_id=session_id, mapping={}, expires_at=expires_at)
+        
+        i = i + 1
+
     layout.append(
-            KeypadCell(
-                inner_value=inner_value,
-                image=img_b64,
-                is_blank=(inner_value is None),
-            )
+        KeypadCell(
+            inner_value=inner_value,
+            image=img_b64,
+            is_blank=(pos is None),
         )
-
-
-    save_session(session_id=session_id, mapping=mapping, expires_at=expires_at)
-
+    )
+    
     return KeypadInitResponse(
         session_id=session_id,
         expires_at=expires_at,
