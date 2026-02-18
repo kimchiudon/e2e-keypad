@@ -29,40 +29,50 @@ def create_keypad_session() -> KeypadInitResponse:
     mapping = {}
     layout = []
     skirt = ["0","0","0","0","0","0","0","0","0","0","0","0"]
-    i=0
+    i = 0
     real_value = 0
 
     for pos, inner_value in enumerate(skirt):
+
         pos = DIGITS[i]
 
-        if pos != None:
+        if pos is not None:
             salt = os.urandom(16)
             real_value = hashlib.sha256(salt).hexdigest()
             inner_value = str (real_value)
             mapping[pos] = inner_value
-            
+            k = str(pos)
+
             try:
-                img_b64 = load_image_base64(pos)
+                img_b64 = load_image_base64(k)
             
             except FileNotFoundError as e:
                 raise HTTPException(status_code=400, detail=str(e))
                 
-            save_session(session_id=session_id, mapping=mapping, expires_at=expires_at)
+            
 
         else:
             img_b64 = load_image_base64("EMPTY")
             inner_value = "0"
-            save_session(session_id=session_id, mapping={}, expires_at=expires_at)
+            mapping = {}
         
         i = i + 1
-
-    layout.append(
-        KeypadCell(
-            inner_value=inner_value,
-            image=img_b64,
-            is_blank=(pos is None),
+    
+        layout.append(
+            KeypadCell(
+                inner_value=inner_value,
+                image=img_b64,
+                is_blank=(pos is None),
+                )
         )
-    )
+
+        if i > 11:
+            break
+
+    
+    save_session(session_id=session_id, mapping=mapping, expires_at=expires_at)
+
+
     
     return KeypadInitResponse(
         session_id=session_id,
