@@ -29,8 +29,8 @@ def create_keypad_session() -> KeypadInitResponse:
     mapping = {}
     layout = []
     skirt = ["0","0","0","0","0","0","0","0","0","0","0","0"]
-    i = 0
     real_value = 0
+    i = 0
 
     for pos, inner_value in enumerate(skirt):
 
@@ -49,15 +49,16 @@ def create_keypad_session() -> KeypadInitResponse:
             except FileNotFoundError as e:
                 raise HTTPException(status_code=400, detail=str(e))
                 
-            
 
         else:
             img_b64 = load_image_base64("EMPTY")
-            inner_value = "0"
+            salt = os.urandom(16)
+            real_value = hashlib.sha256(salt).hexdigest()
+            inner_value = str (real_value)
             mapping = {}
         
         i = i + 1
-    
+ 
         layout.append(
             KeypadCell(
                 inner_value=inner_value,
@@ -66,14 +67,11 @@ def create_keypad_session() -> KeypadInitResponse:
                 )
         )
 
-        if i > 11:
-            break
-
-    
     save_session(session_id=session_id, mapping=mapping, expires_at=expires_at)
 
 
-    
+    random.shuffle(layout)
+
     return KeypadInitResponse(
         session_id=session_id,
         expires_at=expires_at,
