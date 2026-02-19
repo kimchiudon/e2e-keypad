@@ -3,13 +3,17 @@ import random
 import secrets
 from typing import Dict, List
 
-from fastapi import HTTPException
+from fastapi import HTTPException, Request
 from core.config import settings
-from models.keypad_models import KeypadInitResponse, KeypadCell
+from models.keypad_models import KeypadInitResponse, KeypadCell, KeypadSubmitRequest
 from services.session_service import save_session, cleanup_expired_sessions
 from utils.image_utils import load_image_base64
 import os
 import hashlib
+
+import base64
+from Crypto.PublicKey import RSA
+from Crypto.Cipher import PKCS1_OAEP
 
 def _new_session_id() -> str:
     return secrets.token_hex(settings.SESSION_ID_BYTES)
@@ -77,3 +81,18 @@ def create_keypad_session() -> KeypadInitResponse:
         expires_at=expires_at,
         layout=layout,
     )
+
+def user_input(payload: KeypadSubmitRequest) -> dict:
+    session_id = payload.session_id
+    tokens = payload.tokens
+    
+    print(f"[submit] session_id={session_id}")
+    print(f"[submit] tokens={tokens}")
+
+    return {
+        "result": "ok",
+        "session_id": session_id,
+        "tokens_count": len(tokens),
+    }
+
+
