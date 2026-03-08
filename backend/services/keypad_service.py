@@ -42,7 +42,7 @@ def create_keypad_session() -> KeypadInitResponse:
 
         if pos is not None:
             salt = os.urandom(16)
-            real_value = hashlib.sha256(salt).hexdigest()
+            real_value = secrets.token_hex(8)
             inner_value = str (real_value)
             mapping[pos] = inner_value
             k = str(pos)
@@ -57,9 +57,9 @@ def create_keypad_session() -> KeypadInitResponse:
         else:
             img_b64 = load_image_base64("EMPTY")
             salt = os.urandom(16)
-            real_value = hashlib.sha256(salt).hexdigest()
+            real_value = secrets.token_hex(8)
             inner_value = str (real_value)
-            mapping = {}
+
         
         i = i + 1
  
@@ -94,5 +94,3 @@ def user_input(payload: KeypadSubmitRequest) -> dict:
         "session_id": session_id,
         "tokens_count": len(tokens),
     }
-
-

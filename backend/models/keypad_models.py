@@ -14,4 +14,4 @@ class KeypadInitResponse(BaseModel):
 
 class KeypadSubmitRequest(BaseModel):
     session_id: str
-    tokens: List[str]
+    encrypted_data: str

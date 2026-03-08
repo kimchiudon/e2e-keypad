@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { encryptHashArray } from "./utils/crypto";
 
 type Cell = {
   inner_value: string;
@@ -6,90 +7,126 @@ type Cell = {
   is_blank: boolean;
 };
 
+const PUBLIC_KEY_PEM: string =
+  ((import.meta as any).env?.VITE_KEYPAD_PUBLIC_KEY ?? "").replace(/\\n/g, "\n");
+
 export default function App() {
   const [layout, setLayout] = useState<Cell[]>([]);
   const [sessionId, setSessionId] = useState("");
   const [error, setError] = useState("");
-
-  // ✅ 추가: 사용자가 누른 토큰(해시값) 4개를 저장
   const [inputTokens, setInputTokens] = useState<string[]>([]);
   const [submitMsg, setSubmitMsg] = useState<string>("");
 
   const initKeypad = async () => {
     setError("");
     setSubmitMsg("");
-    setInputTokens([]); // ✅ 새 세션이면 입력도 초기화(원하면 이 줄 빼도 됨)
+    setInputTokens([]);
+
     try {
       const res = await fetch("http://127.0.0.1:8000/keypad/init");
-      if (!res.ok) throw new Error("init failed");
+      if (!res.ok) {
+        throw new Error(`init failed: ${res.status}`);
+      }
 
       const data = await res.json();
       setSessionId(data.session_id);
       setLayout(data.layout);
-    } catch (e) {
-      console.error(e);
-      setError("키패드 로딩 실패. 백엔드/자산 파일을 확인하세요.");
+    } catch (e: any) {
+      console.error("initKeypad error:", e);
+      setError(`키패드 로딩 실패: ${e?.message ?? String(e)}`);
     }
   };
 
   useEffect(() => {
-    initKeypad();
+    void initKeypad();
   }, []);
 
   const handleClick = (cell: Cell) => {
     if (cell.is_blank) return;
 
-    // ✅ 이미 4개면 더 받지 않기
     setInputTokens((prev) => {
       if (prev.length >= 4) return prev;
       return [...prev, cell.inner_value];
     });
-
-    console.log("클릭된 토큰:", cell.inner_value);
   };
 
-  // ✅ 추가: 입력 지우기
   const clearInput = () => {
     setSubmitMsg("");
+    setError("");
     setInputTokens([]);
   };
 
-  // ✅ 추가: 4개 토큰을 백엔드로 제출
   const submitInput = async () => {
     setSubmitMsg("");
     setError("");
 
     if (!sessionId) {
-      setError("세션이 없습니다. 키패드를 먼저 초기화하세요.");
+      setError("세션이 없습니다.");
       return;
     }
+
     if (inputTokens.length !== 4) {
-      setError("입력은 정확히 4개가 되어야 제출할 수 있어요.");
+      setError("입력은 정확히 4개여야 합니다.");
+      return;
+    }
+
+    if (!PUBLIC_KEY_PEM || !PUBLIC_KEY_PEM.includes("BEGIN PUBLIC KEY")) {
+      setError("공개키가 없습니다. .env의 VITE_KEYPAD_PUBLIC_KEY를 설정하세요.");
       return;
     }
 
     try {
+      console.log("PUBLIC_KEY_PEM loaded:", PUBLIC_KEY_PEM);
+      console.log("sessionId:", sessionId);
+      console.log("inputTokens:", inputTokens);
+      console.log(
+        "joined tokens length:",
+        inputTokens.join("|").length
+      );
+
+      const encrypted = encryptHashArray(inputTokens, PUBLIC_KEY_PEM);
+
+      console.log("encrypted result:", encrypted);
+
+      if (!encrypted) {
+        setError("RSA 암호화 실패: 토큰 길이 초과 또는 공개키 형식 문제");
+        return;
+      }
+
       const res = await fetch("http://127.0.0.1:8000/keypad/submit", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
           session_id: sessionId,
-          tokens: inputTokens, // ✅ 해시값(inner_value) 4개가 넘어감
+          encrypted_data: encrypted,
         }),
       });
 
+      const rawText = await res.text();
+      console.log("submit status:", res.status);
+      console.log("submit raw response:", rawText);
+
       if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || "submit failed");
+        throw new Error(`submit failed: ${res.status} ${rawText}`);
       }
 
-      const data = await res.json().catch(() => null);
+      let result: any = {};
+      try {
+        result = JSON.parse(rawText);
+      } catch {
+        result = { raw: rawText };
+      }
+
       setSubmitMsg(
-        data ? `제출 성공: ${JSON.stringify(data)}` : "제출 성공"
+        `RSA 암호화 후 전송 성공!\n\n` +
+          `encrypted_data:\n${encrypted}\n\n` +
+          `server response:\n${JSON.stringify(result, null, 2)}`
       );
-    } catch (e) {
-      console.error(e);
-      setError("제출 실패. 백엔드 /keypad/submit 라우팅을 확인하세요.");
+    } catch (e: any) {
+      console.error("submitInput error:", e);
+      setError(`암호화 또는 전송 실패: ${e?.message ?? String(e)}`);
     }
   };
 
@@ -99,10 +136,11 @@ export default function App() {
 
       {error && <div style={{ color: "red", marginBottom: 10 }}>{error}</div>}
       {submitMsg && (
-        <div style={{ color: "green", marginBottom: 10 }}>{submitMsg}</div>
+        <div style={{ color: "green", marginBottom: 10, whiteSpace: "pre-wrap" }}>
+          {submitMsg}
+        </div>
       )}
 
-      {/* ✅ 추가: 입력 상태 표시 + 제출 UI */}
       <div
         style={{
           marginBottom: 12,
@@ -133,17 +171,12 @@ export default function App() {
             입력 지우기
           </button>
 
-          <button
-            onClick={submitInput}
-            type="button"
-            disabled={inputTokens.length !== 4}
-          >
+          <button onClick={submitInput} type="button" disabled={inputTokens.length !== 4}>
             입력 제출
           </button>
         </div>
       </div>
 
-      {/* 기존 키패드 UI 그대로 */}
       <div
         style={{
           display: "grid",
@@ -153,11 +186,11 @@ export default function App() {
       >
         {layout.map((cell, idx) => (
           <button
-            // key는 inner_value가 빈칸에서 중복될 수 있으니 idx 포함
             key={`${cell.inner_value}-${idx}`}
             onClick={() => handleClick(cell)}
-            disabled={cell.is_blank || inputTokens.length >= 4} // ✅ 4개면 입력 막기
+            disabled={cell.is_blank || inputTokens.length >= 4}
             style={{ width: 100, height: 100 }}
+            type="button"
           >
             <img
               src={cell.image}
@@ -168,7 +201,7 @@ export default function App() {
         ))}
       </div>
 
-      <button onClick={initKeypad} style={{ marginTop: 20 }}>
+      <button onClick={initKeypad} style={{ marginTop: 20 }} type="button">
         키패드 재배열(새 세션)
       </button>
 
